@@ -1,0 +1,7 @@
+{
+    "env":{
+        "MONGO_USER":"RegitAdmin",
+        "MONGO_PASSWORD":"RegitAdminPwd",
+        "MONGO_DB":"Event_DB"
+    }
+}

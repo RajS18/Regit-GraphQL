@@ -3,8 +3,10 @@ const bodyParser = require("body-parser");
 const graphqlHttp = require("express-graphql").graphqlHTTP;
 const { buildSchema } = require("graphql");
 const mongoose = require("mongoose");
-const { addPath } = require("graphql/jsutils/Path");
+const bcrypt = require("bcryptjs");
+
 const Event = require("./models/event.js");
+const User = require("./models/user.js");
 
 const app = express();
 
@@ -36,17 +38,29 @@ app.use(
             price: Float!
             date: String!
         }
+        type User{
+          _id:ID!
+          username: String!
+          email: String!
+          password: String
+        }
         input EventInput{
             title: String!
             description: String!
             price: Float!
             date: String!
         }
+        input UserInput{
+          username: String!
+          email: String!
+          password: String!
+        }
         type RootQuery{
             events: [Event!]!
         }
         type RootMutation{
             createEvent(eventInput: EventInput): Event
+            createUser(userInput: UserInput): User
         }
         schema{
             query: RootQuery
@@ -77,15 +91,56 @@ app.use(
           description: args.eventInput.description,
           price: args.eventInput.price,
           date: args.eventInput.date,
+          creator:'63e10ae80513291dc127e29b'//mongoDB automatically converts string to ObjectId type
         });
-
+        let createdEvent;
         return event
           .save()
           .then((r) => {
+            createdEvent = { ...r._doc, _id:r._doc._id.toString()};
+            return User.findById('63e10ae80513291dc127e29b')
+
             return { ...r._doc }; // mongo DB returns object with lots of meta data. To get only the needed ones (cols) we spread response and use _doc attribute.
+          })
+          .then((user)=>{
+            if (!user) {
+              throw new Error("Creator Absent!");
+            }
+            user.pcreatedEvents.push(event);
+            return user.save();
+          })
+          .then(result=>{
+            return createdEvent;
           })
           .catch((err) => {
             console.log(err);
+            throw err;
+          });
+      },
+
+      createUser: (args) => {
+        return User.findOne({ email: args.userInput.email })
+          .then((resp) => {
+            if (resp) {
+              throw new Error("User already Exists!");
+            }
+            return bcrypt.hash(args.userInput.password, 12);//send encrypted pwd
+          })
+          .then((hpwd) => {
+            const user = new User({
+              username: args.userInput.username,
+              email: args.userInput.email,
+              password: hpwd,
+            });
+            return user.save();
+          })
+          .then((result) => {
+            //console.log(result);
+            return { ...result._doc, password: null, _id: result.id }; //override
+          })
+          .catch((err) => {
+            console.log(err);
+            throw err;
           });
       },
     },
